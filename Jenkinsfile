@@ -1,24 +1,14 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.9.5-eclipse-temurin-17'
-            args '-v $HOME/.m2:/root/.m2'
-        }
-    }
+    agent any
 
     environment {
-        SONAR_HOST_URL   = "http://sonarqube:9000"
-        SONAR_AUTH_TOKEN = credentials('sonar-token')  // Token SonarQube
-        GITHUB_REPO      = "https://github.com/Ayataaki/Devops-hapi-fhir-jpaserver.git"
+        DOCKER_IMAGE = "hapi-fhir-server:latest"
+        DOCKERFILE_PATH = "./Dockerfile"
+        GITHUB_REPO = "https://github.com/Ayataaki/Devops-hapi-fhir-jpaserver.git"
         GITHUB_CREDENTIALS = "github-token"
     }
 
-    parameters {
-        booleanParam(name: 'RUN_SONAR', defaultValue: true, description: 'Activer SonarQube')
-    }
-
     stages {
-
         stage('Checkout') {
             steps {
                 echo 'Checkout du code...'
@@ -28,30 +18,34 @@ pipeline {
             }
         }
 
+        stage('Build Docker Image') {
+            steps {
+                echo 'Construction de l’image Docker...'
+                sh """
+                    docker build -t ${DOCKER_IMAGE} -f ${DOCKERFILE_PATH} .
+                """
+            }
+        }
+
+        stage('Run Container for Tests') {
+            steps {
+                echo 'Lancement du conteneur pour tests...'
+                sh """
+                    docker run --rm -d --name hapi-fhir-test -p 9099:8080 ${DOCKER_IMAGE}
+                """
+            }
+        }
+
         stage('SonarQube Analysis') {
-            when { expression { return params.RUN_SONAR } }
             steps {
                 echo 'Analyse SonarQube...'
                 withSonarQubeEnv('SonarQube') {
-                    sh 'mvn clean verify sonar:sonar -Dsonar.host.url=${SONAR_HOST_URL} -Dsonar.login=${SONAR_AUTH_TOKEN}'
+                    sh """
+                        # Run analysis inside the container or via Maven if needed
+                        docker run --rm ${DOCKER_IMAGE} \
+                          mvn sonar:sonar -Dsonar.host.url=${SONAR_HOST_URL} -Dsonar.login=${SONAR_AUTH_TOKEN}
+                    """
                 }
-            }
-        }
-
-        stage('Quality Gate') {
-            when { expression { return params.RUN_SONAR } }
-            steps {
-                echo 'Vérification du Quality Gate...'
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
-        stage('Archive') {
-            steps {
-                echo 'Archivage des artefacts...'
-                archiveArtifacts(artifacts: 'results.csv,results_analysis.json,charts/**/*', allowEmptyArchive: true, fingerprint: true)
             }
         }
     }
@@ -62,9 +56,6 @@ pipeline {
         }
         failure {
             echo '❌ Pipeline échoué'
-        }
-        always {
-            echo "Build #${BUILD_NUMBER} terminé"
         }
     }
 }

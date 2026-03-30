@@ -35,11 +35,6 @@ COPY --from=build-hapi --chown=65532:65532 /tmp/hapi-fhir-jpaserver-starter/targ
 COPY --from=build-hapi --chown=65532:65532 /tmp/hapi-fhir-jpaserver-starter/opentelemetry-javaagent.jar /app
 
 
-FROM jenkins/jenkins:lts
-USER root
-RUN apt-get update && apt-get install -y docker.io
-USER jenkins
-
 ########### distroless brings focus on security and runs on plain spring boot - this is the default image
 FROM gcr.io/distroless/java21-debian13:nonroot AS default
 # 65532 is the nonroot user's uid

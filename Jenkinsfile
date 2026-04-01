@@ -12,14 +12,6 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                echo "Branche : ${env.GIT_BRANCH}"
-                echo "Commit  : ${env.GIT_COMMIT}"
-                sh 'ls -la'
-            }
-        }
-
         stage('Build Maven') {
             steps {
                 echo 'Compilation du projet HAPI FHIR...'
